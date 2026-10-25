@@ -1,0 +1,26 @@
+{
+  "name": "mini-ecommerce-hybrid-dapp",
+  "version": "1.0.0",
+  "description": "Mini E-Commerce Hybrid DApp with Smart Contract Payment",
+  "scripts": {
+    "node": "npm --prefix smart-contract run node",
+    "test:contract": "npm --prefix smart-contract run test",
+    "deploy:local": "npm --prefix smart-contract run deploy:local",
+    "deploy:sepolia": "npm --prefix smart-contract run deploy:sepolia",
+    "backend": "npm --prefix backend start",
+    "backend:dev": "npm --prefix backend run dev",
+    "init-db": "npm --prefix backend run init-db",
+    "frontend": "npm --prefix frontend run dev"
+  },
+  "keywords": [
+    "ecommerce",
+    "hybrid-dapp",
+    "ethereum",
+    "solidity",
+    "hardhat",
+    "react",
+    "express"
+  ],
+  "author": "Mini E-Commerce Hybrid DApp Team",
+  "license": "MIT"
+}
