@@ -1,23 +1,17 @@
 const { pool } = require("../config/db");
 
-// Lấy danh sách đơn hàng (mặc định chỉ lấy đơn chưa bị xóa mềm: is_deleted = 0)
+// Lấy danh sách toàn bộ đơn hàng (Sổ cái bất biến - không lọc xóa mềm)
 async function getAllOrders(req, res) {
   try {
     const userId = req.query.userId || 1;
-    const includeDeleted = req.query.includeDeleted === "true";
 
-    let sql = `
+    const sql = `
       SELECT o.*, u.full_name AS user_name, u.email AS user_email
       FROM orders o
       JOIN users u ON o.user_id = u.id
       WHERE o.user_id = ?
+      ORDER BY o.id DESC
     `;
-
-    if (!includeDeleted) {
-      sql += " AND o.is_deleted = 0";
-    }
-
-    sql += " ORDER BY o.id DESC";
 
     const [orders] = await pool.query(sql, [userId]);
 
@@ -164,54 +158,13 @@ async function createOrder(req, res) {
 }
 
 /**
- * Hủy / Xóa mềm đơn hàng (Soft Delete)
- * NGHIỆP VỤ BẢO VỆ CỐT LÕI:
- * - Nếu đơn hàng đã có status = 'PAID' (hoặc đã có tx_hash trên blockchain):
- *   TỪ CHỐI TUYỆT ĐỐI (HTTP 400 Bad Request) để ngăn chặn khách hàng hủy đơn sau khi tiền đã vào ví Smart Contract!
- * - Nếu đơn hàng đang PENDING: Cho phép cập nhật status = 'CANCELLED', is_deleted = 1, deleted_at = NOW()
+ * Chặn hoàn toàn tính năng hủy hoặc xóa đơn hàng (Chính sách Bất biến - Immutability)
  */
 async function cancelOrSoftDeleteOrder(req, res) {
-  try {
-    const { id } = req.params;
-
-    // Kiểm tra thông tin đơn hàng hiện tại trong database
-    const [rows] = await pool.query("SELECT * FROM orders WHERE id = ?", [id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-
-    const order = rows[0];
-
-    // CHẶN HỦY NẾU ĐÃ THANH TOÁN THÀNH CÔNG TRÊN BLOCKCHAIN
-    if (order.status === "PAID" || order.tx_hash) {
-      console.warn(`⛔ [Security Violation] Attempted to cancel/delete PAID OrderID ${id} (Tx: ${order.tx_hash})`);
-      return res.status(400).json({
-        success: false,
-        message: "Không thể hủy hoặc xóa đơn hàng đã thanh toán thành công trên Blockchain! Tiền đã được xác thực an toàn vào Smart Contract.",
-        orderStatus: order.status,
-        txHash: order.tx_hash,
-      });
-    }
-
-    // Thực hiện Soft Delete an toàn cho đơn hàng PENDING
-    await pool.query(
-      `UPDATE orders 
-       SET status = 'CANCELLED', is_deleted = 1, deleted_at = NOW() 
-       WHERE id = ?`,
-      [id]
-    );
-
-    console.log(`🗑️ [Soft Deleted] OrderID ${id} marked as CANCELLED and is_deleted = 1`);
-
-    res.json({
-      success: true,
-      message: `Đơn hàng #${id} đã được hủy và xóa mềm (Soft Deleted) an toàn.`,
-      orderId: Number(id),
-    });
-  } catch (error) {
-    console.error("Error cancelling order:", error);
-    res.status(500).json({ success: false, message: "Internal server error", error: error.message });
-  }
+  return res.status(403).json({
+    success: false,
+    message: "Chính sách bất biến (Immutability): Mọi đơn hàng một khi đã được tạo đều không thể hủy, xóa mềm hoặc thay đổi dưới bất kỳ hình thức nào!",
+  });
 }
 
 // Khôi phục đơn hàng đã xóa mềm (Dành cho Quản trị viên đối soát)

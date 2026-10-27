@@ -17,7 +17,6 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("products");
-  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
@@ -54,10 +53,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    loadOrders();
-  }, [includeDeleted]);
-
   const loadProducts = async () => {
     try {
       const data = await apiService.getProducts();
@@ -81,7 +76,7 @@ export default function App() {
   const loadOrders = async () => {
     setIsLoadingOrders(true);
     try {
-      const data = await apiService.getOrders(1, includeDeleted);
+      const data = await apiService.getOrders(1);
       setOrders(data);
     } catch (err) {
       console.warn("Failed to load orders from backend:", err.message);
@@ -277,12 +272,6 @@ export default function App() {
     }
   };
 
-  // Hủy đơn hàng (Soft Delete)
-  const handleCancelOrder = async (orderId) => {
-    await apiService.cancelOrder(orderId);
-    await loadOrders();
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
       <div>
@@ -309,7 +298,7 @@ export default function App() {
                   Cửa Hàng Thương Mại Điện Tử Web3
                 </h1>
                 <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-                  Trải nghiệm thanh toán trực tiếp qua <strong className="text-indigo-300">Ethereum Smart Contract</strong> kết hợp hệ cơ sở dữ liệu <strong className="text-indigo-300">MySQL</strong> tốc độ cao với cơ chế <strong className="text-indigo-300">Soft Delete</strong> bảo vệ quyền lợi giao dịch.
+                  Trải nghiệm thanh toán trực tiếp qua <strong className="text-indigo-300">Ethereum Smart Contract</strong> kết hợp hệ cơ sở dữ liệu <strong className="text-indigo-300">MySQL</strong> tốc độ cao với cơ chế <strong className="text-indigo-300">Sổ cái bất biến (Immutable Ledger)</strong> chống gian lận 100%.
                 </p>
               </div>
 
@@ -347,9 +336,6 @@ export default function App() {
               orders={orders}
               onRefresh={loadOrders}
               onPayOrder={handlePayPendingOrder}
-              onCancelOrder={handleCancelOrder}
-              includeDeleted={includeDeleted}
-              setIncludeDeleted={setIncludeDeleted}
               isLoading={isLoadingOrders}
             />
           )}

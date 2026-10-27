@@ -6,29 +6,29 @@ Dự án được phân bổ độc lập và rõ ràng cho **3 Thành viên**:
 
 ---
 
-## 👥 Phân Chia Vai Trò Thành Viên (Team Structure)
+## Phân Chia Vai Trò Thành Viên (Team Structure)
 
 ```
 d:\DA-BlockChain\
 │
-├── database/                    👉 THÀNH VIÊN 1: Database & Data Layer
+├── database/                     Hà: Database & Data Layer
 │   ├── schema.sql               - CSDL MySQL: users, products, cart_items, orders, order_items
 │   └── ERD_Documentation.md     - Sơ đồ ERD, phân tích Off-chain vs On-chain, cơ chế Soft Delete
 │
-├── smart-contract/              👉 THÀNH VIÊN 1: Smart Contract (Solidity & Hardhat)
+├── smart-contract/               Hà: Smart Contract (Solidity & Hardhat)
 │   ├── contracts/               - EcommercePayment.sol (Nhận ETH, emit PaymentCompleted)
 │   ├── scripts/deploy.js        - Tự động deploy & đồng bộ ABI sang Backend và Frontend
 │   ├── test/                    - 8 Automated tests kiểm thử nghiệp vụ thanh toán
 │   └── hardhat.config.js        - Cấu hình Hardhat Localhost & Sepolia Testnet
 │
-├── backend/                     👉 THÀNH VIÊN 2: Backend Developer (Off-chain Logic)
+├── backend/                      Khang: Backend Developer (Off-chain Logic)
 │   ├── src/config/              - Kết nối MySQL Pool (db.js) & Khởi tạo dữ liệu (initDb.js)
 │   ├── src/controllers/         - CRUD Sản phẩm, Giỏ hàng, Đơn hàng
 │   ├── src/services/            - blockchainListener.js (Lắng nghe PaymentCompleted qua ethers.js)
 │   ├── src/routes/              - RESTful API endpoints
 │   └── src/server.js            - Express server chạy cổng 5000
 │
-└── frontend/                    👉 THÀNH VIÊN 3: Frontend Developer (UI/UX & Web3)
+└── frontend/                     Đông: Frontend Developer (UI/UX & Web3)
     ├── src/components/          - Navbar, ProductCard, CartDrawer, OrderHistory, TransactionModal
     ├── src/services/            - web3Service.js (Tích hợp MetaMask), apiService.js (Gọi Backend)
     └── src/App.jsx              - Giao diện cửa hàng, giỏ hàng và thanh toán Web3
@@ -36,9 +36,9 @@ d:\DA-BlockChain\
 
 ---
 
-## 🚀 Hướng Dẫn Chạy Toàn Bộ Dự Án
+## Hướng Dẫn Chạy Toàn Bộ Dự Án
 
-### BƯỚC 1: Dành cho Thành viên 1 (Database & Smart Contract)
+### BƯỚC 1: Hà (Database & Smart Contract)
 
 #### 1. Khởi tạo Cơ sở dữ liệu MySQL
 1. Mở XAMPP hoặc MySQL Server của bạn (đảm bảo dịch vụ MySQL đang chạy).
@@ -80,7 +80,7 @@ npx hardhat test
 
 ---
 
-### BƯỚC 2: Dành cho Thành viên 2 (Backend Developer)
+### BƯỚC 2: Khang (Backend Developer)
 
 1. Cấu hình file `backend/.env` (nếu cần chỉnh user/mật khẩu MySQL):
    ```env
@@ -97,12 +97,12 @@ npx hardhat test
    npm start
    ```
 3. Quan sát log trên màn hình:
-   - `✅ [MySQL] Successfully connected to database`
-   - `👂 [Blockchain Listener] Successfully listening for 'PaymentCompleted' events!`
+   - ` [MySQL] Successfully connected to database`
+   - ` [Blockchain Listener] Successfully listening for 'PaymentCompleted' events!`
 
 ---
 
-### BƯỚC 3: Dành cho Thành viên 3 (Frontend Developer & Web3)
+### BƯỚC 3: Đông (Frontend Developer & Web3)
 
 1. Khởi động ứng dụng ReactJS:
    ```powershell
@@ -122,7 +122,7 @@ npx hardhat test
 
 ---
 
-## 🔒 Kiểm Thử Cơ Chế Xóa Mềm (Soft Delete) & Khóa Hủy Đơn
+## Kiểm Thử Cơ Chế Xóa Mềm (Soft Delete) & Khóa Hủy Đơn
 
 1. **Đơn hàng Chờ thanh toán (PENDING)**: Khách hàng có thể bấm **"Hủy đơn (Soft Delete)"**. Bản ghi trong MySQL được cập nhật `status = 'CANCELLED'`, `is_deleted = 1`, `deleted_at = NOW()`.
 2. **Đơn hàng Đã thanh toán (PAID)**: Sau khi tiền đã vào Smart Contract, nếu người dùng hoặc kẻ gian gửi request `DELETE /api/orders/:id`, Backend sẽ lập tức trả về HTTP `400 Bad Request`:
