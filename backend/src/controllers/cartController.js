@@ -42,7 +42,11 @@ async function addToCart(req, res) {
     // Kiểm tra sản phẩm có tồn tại và còn hàng không
     const [products] = await pool.query("SELECT * FROM products WHERE id = ?", [productId]);
     if (products.length === 0) {
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res.status(404).json({ success: false, message: "Sản phẩm không tồn tại" });
+    }
+    const product = products[0];
+    if (product.stock <= 0) {
+      return res.status(400).json({ success: false, message: `Sản phẩm "${product.name}" hiện đã hết hàng trong kho!` });
     }
 
     // UPSERT vào cart_items

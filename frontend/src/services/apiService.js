@@ -1,61 +1,335 @@
 const API_BASE_URL = "http://localhost:5000/api";
 
 export const apiService = {
-  // Sản phẩm
-  async getProducts() {
+  // ===================== AUTHENTICATION & SESSION =====================
+  getAuthToken() {
+    return localStorage.getItem("dapp_token");
+  },
+
+  setAuthToken(token) {
+    if (token) {
+      localStorage.setItem("dapp_token", token);
+    } else {
+      localStorage.removeItem("dapp_token");
+    }
+  },
+
+  getStoredUser() {
     try {
-      const res = await fetch(`${API_BASE_URL}/products`);
+      const data = localStorage.getItem("dapp_user");
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  setStoredUser(user) {
+    if (user) {
+      localStorage.setItem("dapp_user", JSON.stringify(user));
+    } else {
+      localStorage.removeItem("dapp_user");
+    }
+  },
+
+  clearAuth() {
+    localStorage.removeItem("dapp_token");
+    localStorage.removeItem("dapp_user");
+  },
+
+  async login(email, password) {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Đăng nhập thất bại");
+    if (json.token) this.setAuthToken(json.token);
+    if (json.user) this.setStoredUser(json.user);
+    return json;
+  },
+
+  async register(payload) {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Đăng ký thất bại");
+    if (json.token) this.setAuthToken(json.token);
+    if (json.user) this.setStoredUser(json.user);
+    return json;
+  },
+
+  async getProfile() {
+    const token = this.getAuthToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) {
+      this.clearAuth();
+      return null;
+    }
+    const json = await res.json();
+    if (json.user) this.setStoredUser(json.user);
+    return json.user;
+  },
+
+  async linkWallet(walletAddress) {
+    const token = this.getAuthToken();
+    if (!token) throw new Error("Chưa đăng nhập");
+    const res = await fetch(`${API_BASE_URL}/auth/link-wallet`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ wallet_address: walletAddress }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Liên kết ví thất bại");
+    return json;
+  },
+
+  // ===================== SẢN PHẨM =====================
+  async getProducts(includeHidden = false) {
+    try {
+      const url = includeHidden ? `${API_BASE_URL}/products?includeHidden=true` : `${API_BASE_URL}/products`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch products");
       const data = await res.json();
       return data.data || [];
     } catch (error) {
-      console.warn("Backend not reached for products, using fallback sample items:", error.message);
-      return [
-        {
-          id: 1,
-          name: "Ledger Nano X Web3 Hardware Wallet",
-          description: "Ví lạnh bảo mật khóa riêng tư tối đa, hỗ trợ kết nối Bluetooth và hơn 5,500 token crypto.",
-          price_eth: "0.00050000",
-          image_url: "https://images.unsplash.com/photo-1622979135225-d2ba269bc1df?auto=format&fit=crop&w=800&q=80",
-          stock: 25,
-        },
-        {
-          id: 2,
-          name: "Cyberpunk Mechanical Keyboard",
-          description: "Bàn phím cơ thiết kế Cyberpunk tích hợp đèn RGB chuyển màu và keycap xuyên led PBT cao cấp.",
-          price_eth: "0.00080000",
-          image_url: "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80",
-          stock: 15,
-        },
-        {
-          id: 3,
-          name: "Exclusive Web3 Genesis NFT Hoodie",
-          description: "Áo Hoodie phiên bản giới hạn kỷ niệm khởi chạy mạng Web3, vải cotton nỉ 100% thoáng mát.",
-          price_eth: "0.00030000",
-          image_url: "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80",
-          stock: 50,
-        },
-        {
-          id: 4,
-          name: "Ethereum Crystal Hologram Lamp",
-          description: "Đèn decor biểu tượng Ethereum hiệu ứng Hologram 3D phát sáng nhiều chế độ màu.",
-          price_eth: "0.00020000",
-          image_url: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=800&q=80",
-          stock: 40,
-        },
-        {
-          id: 5,
-          name: "Smart Hardware Security Key FIDO2",
-          description: "Khóa bảo mật vật lý chống phishing 2FA/WebAuthn chuẩn bảo mật quốc tế.",
-          price_eth: "0.00040000",
-          image_url: "https://images.unsplash.com/photo-1563770660941-20978e870e26?auto=format&fit=crop&w=800&q=80",
-          stock: 30,
-        },
-      ];
+      console.warn("Backend not reached for products, error:", error.message);
+      return [];
     }
   },
 
-  // Giỏ hàng
+  async createProduct(productData) {
+    const res = await fetch(`${API_BASE_URL}/products`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(productData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Tạo sản phẩm thất bại");
+    return json;
+  },
+
+  async updateProduct(id, productData) {
+    const res = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(productData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Cập nhật sản phẩm thất bại");
+    return json;
+  },
+
+  async toggleProductVisibility(id) {
+    const res = await fetch(`${API_BASE_URL}/products/${id}/toggle-visibility`, {
+      method: "PATCH",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Không thể thay đổi trạng thái ẩn/hiện sản phẩm");
+    return json;
+  },
+
+  async deleteProduct(id) {
+    const res = await fetch(`${API_BASE_URL}/products/${id}`, {
+      method: "DELETE",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Xóa sản phẩm thất bại");
+    return json;
+  },
+
+  // ===================== UPLOAD FILE / ẢNH SẢN PHẨM =====================
+  async uploadImage(file) {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const token = this.getAuthToken();
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Tải ảnh từ máy tính thất bại");
+    return json.url;
+  },
+
+  // ===================== DANH MỤC =====================
+  async getCategories(includeHidden = false) {
+    try {
+      const url = includeHidden ? `${API_BASE_URL}/categories?includeHidden=true` : `${API_BASE_URL}/categories`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      const data = await res.json();
+      return data.data || [];
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      return [];
+    }
+  },
+
+  async createCategory(categoryData) {
+    const res = await fetch(`${API_BASE_URL}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(categoryData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Tạo danh mục thất bại");
+    return json;
+  },
+
+  async updateCategory(id, categoryData) {
+    const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(categoryData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Cập nhật danh mục thất bại");
+    return json;
+  },
+
+  async toggleCategoryVisibility(id) {
+    const res = await fetch(`${API_BASE_URL}/categories/${id}/toggle-visibility`, {
+      method: "PATCH",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Không thể thay đổi trạng thái ẩn/hiện danh mục");
+    return json;
+  },
+
+  async deleteCategory(id) {
+    const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
+      method: "DELETE",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Xóa danh mục thất bại");
+    return json;
+  },
+
+  // ===================== NGƯỜI DÙNG =====================
+  async getUsers() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users`);
+      if (!res.ok) throw new Error("Failed to fetch users");
+      const data = await res.json();
+      return data.data || [];
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      return [];
+    }
+  },
+
+  async createUser(userData) {
+    const res = await fetch(`${API_BASE_URL}/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Tạo người dùng thất bại");
+    return json;
+  },
+
+  async updateUser(id, userData) {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userData),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Cập nhật người dùng thất bại");
+    return json;
+  },
+
+  async toggleUserVisibility(id) {
+    const res = await fetch(`${API_BASE_URL}/users/${id}/toggle-visibility`, {
+      method: "PATCH",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Chuyển trạng thái người dùng thất bại");
+    return json;
+  },
+
+  async deleteUser(id) {
+    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+      method: "DELETE",
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Ẩn người dùng thất bại");
+    return json;
+  },
+
+  // ===================== ĐƠN HÀNG =====================
+  async getOrders(userId = 1) {
+    const url = userId ? `${API_BASE_URL}/orders?userId=${userId}` : `${API_BASE_URL}/orders`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch orders");
+    const json = await res.json();
+    return json.data || [];
+  },
+
+  async getAllAdminOrders(status = null) {
+    const url = status ? `${API_BASE_URL}/orders?status=${status}` : `${API_BASE_URL}/orders`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch all orders for admin");
+    const json = await res.json();
+    return json.data || [];
+  },
+
+  async createOrder(payload) {
+    const res = await fetch(`${API_BASE_URL}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.message || "Failed to create order");
+    }
+    return json;
+  },
+
+  async cancelOrder(orderId) {
+    const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+      method: "DELETE",
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.message || "Không thể hủy đơn hàng");
+    }
+    return json;
+  },
+
+  async restoreOrder(orderId) {
+    const res = await fetch(`${API_BASE_URL}/orders/${orderId}/restore`, {
+      method: "PATCH",
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.message || "Không thể khôi phục đơn hàng");
+    }
+    return json;
+  },
+
+  // ===================== GIỎ HÀNG =====================
   async getCart(userId = 1) {
     const res = await fetch(`${API_BASE_URL}/cart/${userId}`);
     if (!res.ok) throw new Error("Failed to fetch cart");
@@ -94,39 +368,15 @@ export const apiService = {
     return res.json();
   },
 
-  // Đơn hàng
-  async getOrders(userId = 1, includeDeleted = false) {
-    const res = await fetch(`${API_BASE_URL}/orders?userId=${userId}&includeDeleted=${includeDeleted}`);
-    if (!res.ok) throw new Error("Failed to fetch orders");
+  // ===================== THỐNG KÊ ADMIN =====================
+  async getAdminStats() {
+    const res = await fetch(`${API_BASE_URL}/admin/stats`);
+    if (!res.ok) throw new Error("Failed to fetch admin stats");
     const json = await res.json();
-    return json.data || [];
+    return json.data;
   },
 
-  async createOrder(payload) {
-    const res = await fetch(`${API_BASE_URL}/orders`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.message || "Failed to create order");
-    }
-    return json;
-  },
-
-  async cancelOrder(orderId) {
-    const res = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
-      method: "DELETE",
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.message || "Không thể hủy đơn hàng");
-    }
-    return json;
-  },
-
-  // Xác thực đồng bộ tức thì với Backend sau khi MetaMask gửi tx
+  // ===================== BLOCKCHAIN SYNC =====================
   async verifyPayment(txHash, orderId) {
     try {
       const res = await fetch(`${API_BASE_URL}/blockchain/verify-payment`, {

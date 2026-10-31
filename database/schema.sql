@@ -16,23 +16,42 @@ CREATE TABLE IF NOT EXISTS `users` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `full_name` VARCHAR(100) NOT NULL,
     `email` VARCHAR(100) NOT NULL UNIQUE,
+    `password` VARCHAR(255) NULL COMMENT 'Mật khẩu đã được mã hóa bằng bcrypt',
+    `role` ENUM('ADMIN', 'CUSTOMER') NOT NULL DEFAULT 'CUSTOMER' COMMENT 'Phân quyền: ADMIN hoặc CUSTOMER',
     `wallet_address` VARCHAR(42) NULL COMMENT 'Địa chỉ ví MetaMask người dùng (0x...)',
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = Hoạt động, 0 = Ẩn/Khóa tài khoản',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
--- 2. Table: products (Sản phẩm)
+-- 2. Table: categories (Danh mục sản phẩm)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `categories` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `name` VARCHAR(100) NOT NULL,
+    `slug` VARCHAR(100) NOT NULL UNIQUE,
+    `description` TEXT NULL,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = Hiển thị danh mục, 0 = Ẩn danh mục',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
+-- 3. Table: products (Sản phẩm)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `products` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `category_id` INT NULL,
     `name` VARCHAR(200) NOT NULL,
     `description` TEXT,
     `price_eth` DECIMAL(18, 8) NOT NULL COMMENT 'Đơn giá tính bằng ETH',
     `image_url` VARCHAR(500) NULL,
     `stock` INT NOT NULL DEFAULT 0,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1 = Hiển thị trên cửa hàng, 0 = Ẩn sản phẩm',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `fk_product_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------

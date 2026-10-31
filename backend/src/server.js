@@ -10,6 +10,11 @@ const { startBlockchainListener, verifyAndSyncPayment } = require("./services/bl
 const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const userRoutes = require("./routes/userRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const authRoutes = require("./routes/authRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,6 +23,9 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Phục vụ file tĩnh trong thư mục uploads (ảnh sản phẩm tải lên)
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
 // Request logger
 app.use((req, res, next) => {
   console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
@@ -25,9 +33,14 @@ app.use((req, res, next) => {
 });
 
 // API Routes
+app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Endpoint xác thực giao dịch tức thì (Dự phòng cho Frontend khi vừa gửi txHash)
 app.post("/api/blockchain/verify-payment", async (req, res) => {

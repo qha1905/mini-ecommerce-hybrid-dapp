@@ -1,12 +1,21 @@
-import React from "react";
-import { Receipt, CheckCircle, Clock, ExternalLink, RefreshCw, ShieldCheck, Wallet, Lock, Ban } from "lucide-react";
+import React, { useState } from "react";
+import { Receipt, CheckCircle, Clock, ExternalLink, RefreshCw, ShieldCheck, Wallet, Lock, Ban, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 export default function OrderHistory({
   orders,
   onRefresh,
   onPayOrder,
+  onCancelOrder,
   isLoading,
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 10;
+
+  const totalPages = Math.ceil((orders?.length || 0) / ordersPerPage) || 1;
+  const validPage = Math.min(Math.max(currentPage, 1), totalPages);
+  const startIndex = (validPage - 1) * ordersPerPage;
+  const paginatedOrders = (orders || []).slice(startIndex, startIndex + ordersPerPage);
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       
@@ -18,14 +27,14 @@ export default function OrderHistory({
             Lịch sử Đơn hàng
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Sổ cái đơn hàng bất biến (Immutable Ledger) • Không thể hủy hoặc xóa
+            Theo dõi đơn hàng & trạng thái thanh toán Smart Contract Sepolia • Hỗ trợ hủy đơn chờ (Pending)
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Chính sách: Bất biến 100%</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Xác thực On-chain</span>
           </div>
 
           <button
@@ -52,7 +61,7 @@ export default function OrderHistory({
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map((order) => {
+          {paginatedOrders.map((order) => {
             const isPaid = order.status === "PAID";
             const isCancelled = order.status === "CANCELLED" || order.is_deleted === 1;
             const isPending = !isPaid && !isCancelled;
@@ -159,9 +168,14 @@ export default function OrderHistory({
                   <div className="flex items-center gap-2">
                     {isPending && (
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400 italic">
-                          Không thể hủy
-                        </span>
+                        <button
+                          onClick={() => onCancelOrder && onCancelOrder(order)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 text-xs font-semibold shadow-sm transition-all active:scale-95"
+                          title="Hủy đơn hàng này (xóa mềm)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hủy đơn</span>
+                        </button>
                         <button
                           onClick={() => onPayOrder(order)}
                           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
@@ -180,14 +194,9 @@ export default function OrderHistory({
                     )}
 
                     {isCancelled && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => onPayOrder(order)}
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
-                        >
-                          <Wallet className="w-3.5 h-3.5" />
-                          <span>Thanh toán MetaMask</span>
-                        </button>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium">
+                        <Ban className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Đơn hàng đã hủy</span>
                       </div>
                     )}
                   </div>
@@ -196,6 +205,57 @@ export default function OrderHistory({
               </div>
             );
           })}
+
+          {/* Pagination Controls (10 orders per page) */}
+          {totalPages > 1 && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm text-xs mt-6">
+              <div className="text-slate-500 font-medium">
+                Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.min(startIndex + ordersPerPage, orders.length)}
+                </span>{" "}
+                trên tổng số <span className="font-bold text-indigo-600">{orders.length}</span> đơn hàng
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  disabled={validPage === 1}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 disabled:hover:bg-white font-medium transition-colors flex items-center gap-1 shadow-sm"
+                  title="Trang trước"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Trước</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-xl font-bold text-xs transition-all ${
+                        validPage === pageNum
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                          : "border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={validPage === totalPages}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 disabled:hover:bg-white font-medium transition-colors flex items-center gap-1 shadow-sm"
+                  title="Trang sau"
+                >
+                  <span>Sau</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
