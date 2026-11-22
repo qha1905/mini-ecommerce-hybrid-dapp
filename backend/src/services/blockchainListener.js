@@ -315,6 +315,32 @@ async function verifyAndSyncPayment(txHash, fallbackOrderId) {
 }
 
 /**
+ * Tra cứu sự kiện PaymentCompleted thật trên Blockchain theo orderId (trong ~40,000 block gần nhất)
+ */
+async function findRealOnChainPayment(contract, provider, orderId) {
+  if (!contract || !provider) return null;
+  try {
+    const latestBlock = await provider.getBlockNumber();
+    const fromBlock = Math.max(0, latestBlock - 40000);
+    const filter = contract.filters.PaymentCompleted(orderId);
+    const events = await contract.queryFilter(filter, fromBlock, latestBlock);
+    if (events.length > 0) {
+      const ev = events[events.length - 1];
+      return {
+        txHash: ev.transactionHash,
+        orderId: Number(ev.args.orderId),
+        buyerWallet: ev.args.buyer.toLowerCase(),
+        amountEth: ethers.formatEther(ev.args.amount),
+        blockNumber: ev.blockNumber,
+      };
+    }
+  } catch (e) {
+    console.warn("Không thể queryFilter PaymentCompleted:", e.message);
+  }
+  return null;
+}
+
+/**
  * Kiểm toán toàn vẹn dữ liệu On-chain vs Off-chain (MySQL)
  * Phát hiện trường hợp kẻ gian sửa trực tiếp tx_hash, status, buyer_wallet hoặc total_amount_eth trong Database
  */
@@ -336,6 +362,14 @@ async function verifyOrderIntegrity(orderId) {
     providerInstance = new ethers.JsonRpcProvider(rpcUrl);
   }
 
+  const dbSnapshot = {
+    orderId: order.id,
+    status: order.status,
+    txHash: order.tx_hash || null,
+    buyerWallet: order.buyer_wallet || null,
+    amountEth: order.total_amount_eth ? String(order.total_amount_eth) : null,
+  };
+
   try {
     const contract = contractAddress && contractAbi
       ? new ethers.Contract(contractAddress, contractAbi, providerInstance)
@@ -343,14 +377,21 @@ async function verifyOrderIntegrity(orderId) {
 
     // Trường hợp 1: Đơn trong DB chưa phải PAID -> kiểm tra trên chuỗi xem có ai sửa ngược trạng thái trong DB không
     if (order.status !== "PAID") {
+      let isPaidOnChain = false;
+      let realEvent = null;
       if (contract) {
-        const isPaidOnChain = await contract.isOrderPaid(numericId);
+        isPaidOnChain = await contract.isOrderPaid(numericId);
         if (isPaidOnChain) {
+          realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
           return {
             success: true,
             verified: false,
             status: "TAMPERED",
             message: `Phát hiện bất thường: Đơn #${numericId} đã thanh toán trên Smart Contract nhưng trạng thái trong CSDL bị sửa thành '${order.status}'!`,
+            comparison: {
+              db: dbSnapshot,
+              blockchain: realEvent || { txHash: null, note: "Đã thanh toán (isOrderPaid = true)" },
+            },
           };
         }
       }
@@ -359,35 +400,54 @@ async function verifyOrderIntegrity(orderId) {
         verified: true,
         status: "UNPAID",
         message: `Đơn hàng #${numericId} (${order.status}) chưa thanh toán — khớp với trạng thái trên Blockchain.`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: { txHash: null, status: "Chưa thanh toán trên chuỗi" },
+        },
       };
     }
 
     // Trường hợp 2: Đơn trong DB đang là PAID -> kiểm chứng tx_hash và event trên chuỗi
     if (!order.tx_hash || !/^0x([A-Fa-f0-9]{64})$/.test(order.tx_hash.trim())) {
+      const realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
       return {
         success: true,
         verified: false,
         status: "TAMPERED",
         message: `Phát hiện sửa đổi CSDL: Đơn #${numericId} có trạng thái PAID nhưng mã băm tx_hash bị thiếu hoặc sai định dạng!`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: realEvent || { txHash: null, note: "Không tìm thấy giao dịch tương ứng trên chuỗi" },
+        },
       };
     }
 
     const receipt = await providerInstance.getTransactionReceipt(order.tx_hash.trim());
     if (!receipt || receipt.status !== 1) {
+      const realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
       return {
         success: true,
         verified: false,
         status: "TAMPERED",
-        message: `Phát hiện giả mạo tx_hash: Mã băm ${order.tx_hash} trong CSDL không tồn tại hoặc giao dịch thất bại trên Blockchain Sepolia!`,
+        message: `Phát hiện giả mạo tx_hash: Mã băm trong CSDL không tồn tại hoặc giao dịch thất bại trên Blockchain Sepolia!`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: realEvent || { txHash: null, note: "Không tìm thấy giao dịch hợp lệ cho đơn này trên chuỗi" },
+        },
       };
     }
 
     if (contractAddress && receipt.to && receipt.to.toLowerCase() !== contractAddress.toLowerCase()) {
+      const realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
       return {
         success: true,
         verified: false,
         status: "TAMPERED",
         message: `Phát hiện tráo mã băm: Giao dịch trong CSDL được gửi tới địa chỉ ${receipt.to}, không phải Smart Contract của cửa hàng (${contractAddress})!`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: realEvent || { txHash: null, note: `Giao dịch DB trỏ tới contract khác (${receipt.to})` },
+        },
       };
     }
 
@@ -410,11 +470,16 @@ async function verifyOrderIntegrity(orderId) {
     }
 
     if (!parsedEvent) {
+      const realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
       return {
         success: true,
         verified: false,
         status: "TAMPERED",
-        message: `Phát hiện giả mạo: Giao dịch ${order.tx_hash} không chứa sự kiện PaymentCompleted của Smart Contract!`,
+        message: `Phát hiện giả mạo: Giao dịch trong CSDL không chứa sự kiện PaymentCompleted của Smart Contract!`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: realEvent || { txHash: null, note: "Giao dịch không có sự kiện thanh toán" },
+        },
       };
     }
 
@@ -424,12 +489,25 @@ async function verifyOrderIntegrity(orderId) {
     const dbAmountEth = parseFloat(order.total_amount_eth);
     const dbBuyer = (order.buyer_wallet || "").toLowerCase();
 
+    const onChainData = {
+      txHash: order.tx_hash.trim(),
+      orderId: onChainOrderId,
+      buyerWallet: onChainBuyer,
+      amountEth: ethers.formatEther(parsedEvent.args.amount),
+      blockNumber: receipt.blockNumber,
+    };
+
     if (onChainOrderId !== numericId) {
+      const realEvent = await findRealOnChainPayment(contract, providerInstance, numericId);
       return {
         success: true,
         verified: false,
         status: "TAMPERED",
         message: `Phát hiện tráo mã băm giữa các đơn! tx_hash trong CSDL thuộc về đơn #${onChainOrderId}, không phải đơn #${numericId}!`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: realEvent || onChainData,
+        },
       };
     }
 
@@ -439,6 +517,10 @@ async function verifyOrderIntegrity(orderId) {
         verified: false,
         status: "TAMPERED",
         message: `Phát hiện sửa ví người mua trong CSDL! DB lưu (${order.buyer_wallet || "trống"}) ≠ Blockchain (${onChainBuyer}).`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: onChainData,
+        },
       };
     }
 
@@ -448,6 +530,10 @@ async function verifyOrderIntegrity(orderId) {
         verified: false,
         status: "TAMPERED",
         message: `Phát hiện sai lệch số tiền! CSDL ghi ${dbAmountEth} ETH ≠ Blockchain thực nhận ${onChainAmountEth} ETH.`,
+        comparison: {
+          db: dbSnapshot,
+          blockchain: onChainData,
+        },
       };
     }
 
@@ -456,17 +542,20 @@ async function verifyOrderIntegrity(orderId) {
       verified: true,
       status: "MATCHED",
       message: `Toàn vẹn 100%: Mã băm tx_hash, ví người mua và số tiền (${onChainAmountEth} ETH) khớp hoàn toàn với Blockchain Sepolia!`,
-      onChainData: {
-        orderId: onChainOrderId,
-        buyer: onChainBuyer,
-        amountEth: ethers.formatEther(parsedEvent.args.amount),
-        blockNumber: receipt.blockNumber,
-        txHash: order.tx_hash,
+      comparison: {
+        db: dbSnapshot,
+        blockchain: onChainData,
       },
     };
   } catch (error) {
     console.error("Lỗi khi kiểm toán toàn vẹn đơn hàng:", error);
-    return { success: false, verified: false, status: "ERROR", message: "Lỗi kết nối RPC Blockchain: " + error.message };
+    return {
+      success: false,
+      verified: false,
+      status: "ERROR",
+      message: "Lỗi kết nối RPC Blockchain: " + error.message,
+      comparison: { db: dbSnapshot, blockchain: null },
+    };
   }
 }
 

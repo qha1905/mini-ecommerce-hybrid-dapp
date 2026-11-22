@@ -1558,20 +1558,40 @@ export default function AdminDashboard({
                                 <span className="text-xs text-slate-500 italic">Chưa giao dịch</span>
                               )}
                               {auditResults[o.id] && (
-                                <div className="mt-1">
+                                <div className="mt-1.5 space-y-0.5 text-[11px] font-mono">
                                   {auditResults[o.id].verified ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                                    <span className="inline-flex items-center gap-1 font-sans font-semibold text-emerald-400">
                                       <ShieldCheck className="w-3.5 h-3.5" />
                                       Khớp On-chain (Toàn vẹn)
                                     </span>
                                   ) : (
                                     <span
-                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400"
+                                      className="inline-flex items-center gap-1 font-sans font-bold text-rose-400"
                                       title={auditResults[o.id].message}
                                     >
                                       <AlertTriangle className="w-3.5 h-3.5" />
                                       Bị thay đổi dữ liệu DB!
                                     </span>
+                                  )}
+                                  {auditResults[o.id].comparison && (
+                                    <div className="text-[10px] text-slate-400 leading-tight">
+                                      <div>
+                                        DB:{" "}
+                                        <span className={auditResults[o.id].verified ? "text-slate-300" : "text-rose-300"}>
+                                          {auditResults[o.id].comparison.db?.txHash
+                                            ? `${auditResults[o.id].comparison.db.txHash.slice(0, 10)}...${auditResults[o.id].comparison.db.txHash.slice(-6)}`
+                                            : "Không có"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        Chain:{" "}
+                                        <span className="text-emerald-300">
+                                          {auditResults[o.id].comparison.blockchain?.txHash
+                                            ? `${auditResults[o.id].comparison.blockchain.txHash.slice(0, 10)}...${auditResults[o.id].comparison.blockchain.txHash.slice(-6)}`
+                                            : auditResults[o.id].comparison.blockchain?.note || "Không tìm thấy"}
+                                        </span>
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                               )}
@@ -2502,14 +2522,63 @@ export default function AdminDashboard({
 
                   {auditResults[selectedOrderDetails.id] && (
                     <div
-                      className={`p-3 rounded-lg border text-xs leading-relaxed ${
+                      className={`p-3 rounded-lg border text-xs leading-relaxed space-y-2.5 ${
                         auditResults[selectedOrderDetails.id].verified
                           ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                          : "bg-rose-500/15 border-rose-500/40 text-rose-300 font-semibold"
+                          : "bg-rose-500/15 border-rose-500/40 text-rose-300"
                       }`}
                     >
-                      {auditResults[selectedOrderDetails.id].verified ? "✅ " : "🚨 "}
-                      {auditResults[selectedOrderDetails.id].message}
+                      <div className="font-semibold">
+                        {auditResults[selectedOrderDetails.id].verified ? "✅ " : "🚨 "}
+                        {auditResults[selectedOrderDetails.id].message}
+                      </div>
+
+                      {auditResults[selectedOrderDetails.id].comparison && (
+                        <div className="grid grid-cols-1 gap-2 pt-2 border-t border-slate-700/60 font-mono text-[11px]">
+                          <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 font-sans font-semibold block mb-0.5">
+                              Mã băm trong Database (MySQL):
+                            </span>
+                            <span className={`break-all ${auditResults[selectedOrderDetails.id].verified ? "text-slate-200" : "text-rose-300"}`}>
+                              {auditResults[selectedOrderDetails.id].comparison.db?.txHash || "Không có"}
+                            </span>
+                            <div className="text-slate-400 mt-1">
+                              Số tiền: <span className="text-slate-200">{auditResults[selectedOrderDetails.id].comparison.db?.amountEth || "—"} ETH</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 font-sans font-semibold block mb-0.5">
+                              Mã băm thật trên Blockchain (Sepolia):
+                            </span>
+                            {auditResults[selectedOrderDetails.id].comparison.blockchain?.txHash ? (
+                              <a
+                                href={`https://sepolia.etherscan.io/tx/${auditResults[selectedOrderDetails.id].comparison.blockchain.txHash}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-emerald-300 hover:underline break-all inline-flex items-center gap-1"
+                              >
+                                <span>{auditResults[selectedOrderDetails.id].comparison.blockchain.txHash}</span>
+                                <ExternalLink className="w-3 h-3 shrink-0" />
+                              </a>
+                            ) : (
+                              <span className="text-amber-300">
+                                {auditResults[selectedOrderDetails.id].comparison.blockchain?.note ||
+                                  auditResults[selectedOrderDetails.id].comparison.blockchain?.status ||
+                                  "Không tìm thấy trên chuỗi"}
+                              </span>
+                            )}
+                            {auditResults[selectedOrderDetails.id].comparison.blockchain?.amountEth && (
+                              <div className="text-slate-400 mt-1">
+                                Thực nhận trên chuỗi:{" "}
+                                <span className="text-emerald-300">
+                                  {auditResults[selectedOrderDetails.id].comparison.blockchain.amountEth} ETH
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
