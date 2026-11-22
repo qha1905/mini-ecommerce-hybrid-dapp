@@ -5,7 +5,7 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Đọc trực tiếp file .env dùng chung tại thư mục gốc (D:\DA-BlockChain\.env)
+  // Đọc trực tiếp file .env dùng chung tại thư mục gốc (D:\DA-Team\.env)
   envDir: path.resolve(__dirname, ".."),
   envPrefix: ["VITE_", "CONTRACT_"],
   server: {

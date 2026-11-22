@@ -4,9 +4,20 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
+        rarible: {
+          yellow: "#e2f500",
+          yellowHover: "#ecff1a",
+          dark: "#050608",
+          card: "#0d0e14",
+          cardHover: "#161822",
+          border: "#1f222d",
+          borderHover: "#333748",
+          textMuted: "#8e92a4"
+        },
         brand: {
           50: "#f0fdf4",
           100: "#dcfce7",

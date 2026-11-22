@@ -1,5 +1,17 @@
 import React, { useState } from "react";
-import { Receipt, CheckCircle, Clock, ExternalLink, RefreshCw, ShieldCheck, Wallet, Lock, Ban, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import {
+  Receipt,
+  CheckCircle,
+  Clock,
+  ExternalLink,
+  RefreshCw,
+  ShieldCheck,
+  Wallet,
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+} from "lucide-react";
 
 export default function OrderHistory({
   orders,
@@ -17,45 +29,47 @@ export default function OrderHistory({
   const paginatedOrders = (orders || []).slice(startIndex, startIndex + ordersPerPage);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 text-white">
       
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <Receipt className="w-6 h-6 text-indigo-600" />
-            Lịch sử Đơn hàng
+          <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#e2f500]/10 border border-[#e2f500]/20 flex items-center justify-center text-[#e2f500]">
+              <Receipt className="w-4 h-4" />
+            </div>
+            <span>Lịch sử Đơn hàng</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#80869a] mt-1">
             Theo dõi đơn hàng & trạng thái thanh toán Smart Contract Sepolia • Hỗ trợ hủy đơn chờ (Pending)
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#10c273] bg-[#10c273]/10 border border-[#10c273]/20 px-3 py-1.5 rounded-full">
+            <ShieldCheck className="w-3.5 h-3.5" />
             <span>Xác thực On-chain</span>
           </div>
 
           <button
             onClick={onRefresh}
             disabled={isLoading}
-            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shadow-sm transition-colors"
+            className="p-2.5 rounded-full border border-[#232736] bg-[#141620] hover:bg-[#1b1f2d] text-gray-300 hover:text-white shadow-sm transition-colors cursor-pointer"
             title="Làm mới danh sách"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-indigo-600" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-[#e2f500]" : ""}`} />
           </button>
         </div>
       </div>
 
       {/* Orders List */}
       {(!orders || orders.length === 0) ? (
-        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center shadow-sm">
-          <div className="w-16 h-16 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center mx-auto mb-4">
-            <Receipt className="w-8 h-8" />
+        <div className="bg-[#0d0e14] rounded-2xl border border-[#232736] p-12 text-center shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-[#141620] border border-[#222634] text-gray-400 flex items-center justify-center mx-auto mb-4">
+            <Receipt className="w-8 h-8 text-[#6c7285]" />
           </div>
-          <h3 className="text-base font-bold text-slate-800">Chưa có đơn hàng nào</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+          <h3 className="text-base font-bold text-white">Chưa có đơn hàng nào</h3>
+          <p className="text-xs text-[#80869a] mt-1 max-w-sm mx-auto leading-relaxed">
             Khi bạn đặt hàng qua giao diện cửa hàng và thanh toán bằng MetaMask, các đơn hàng sẽ được hiển thị vĩnh viễn tại đây.
           </p>
         </div>
@@ -69,37 +83,38 @@ export default function OrderHistory({
             return (
               <div
                 key={order.id}
-                className={`bg-white rounded-2xl border p-5 sm:p-6 transition-all shadow-sm ${
+                className={`rounded-2xl border p-5 sm:p-6 transition-all shadow-md ${
                   isPaid
-                    ? "border-emerald-200/80 bg-emerald-50/20"
+                    ? "border-emerald-500/30 bg-[#0c1310]"
                     : isCancelled
-                    ? "border-slate-200 bg-slate-50/70"
-                    : "border-amber-200/80 bg-amber-50/20"
+                    ? "border-[#1e2230] bg-[#0c0d12] opacity-80"
+                    : "border-amber-500/30 bg-[#14120c]"
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                {/* Order Top Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-base font-extrabold text-slate-900">
+                    <span className="font-mono text-base font-black text-white">
                       Đơn hàng #{order.id}
                     </span>
                     
                     {/* Status Badges */}
                     {isPaid && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#10c273]/15 text-[#10c273] border border-[#10c273]/30">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Đã thanh toán (PAID)
                       </span>
                     )}
 
                     {isPending && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30">
                         <Clock className="w-3.5 h-3.5 animate-pulse" />
                         Chờ thanh toán (PENDING)
                       </span>
                     )}
 
                     {isCancelled && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/5 text-gray-400 border border-white/10">
                         <Ban className="w-3.5 h-3.5" />
                         Đã hủy trước đó
                       </span>
@@ -107,24 +122,26 @@ export default function OrderHistory({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-xs text-slate-400 block">Tổng tiền</span>
-                    <span className="text-lg font-extrabold text-indigo-600 font-mono">
-                      Ξ {order.total_amount_eth} ETH
+                    <span className="text-[10px] text-[#80869a] uppercase tracking-wider block">
+                      Tổng tiền
+                    </span>
+                    <span className="text-lg font-black text-[#e2f500] font-mono">
+                      Ξ {order.total_amount_eth} <span className="text-xs text-[#80869a]">ETH</span>
                     </span>
                   </div>
                 </div>
 
                 {/* Items in Order */}
                 {order.items && order.items.length > 0 && (
-                  <div className="py-4 space-y-2">
+                  <div className="my-3.5 p-3 rounded-xl bg-[#12141c]/80 border border-[#1f2330] space-y-2">
                     {order.items.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs text-slate-600">
+                      <div key={idx} className="flex items-center justify-between text-xs text-gray-300">
                         <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                          <span className="font-medium text-slate-800">{item.product_name}</span>
-                          <span className="text-slate-400">x{item.quantity}</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#e2f500]" />
+                          <span className="font-semibold text-white">{item.product_name}</span>
+                          <span className="text-[#80869a]">x{item.quantity}</span>
                         </div>
-                        <span className="font-mono font-semibold text-slate-700">
+                        <span className="font-mono font-bold text-gray-200">
                           Ξ {(item.quantity * parseFloat(item.unit_price_eth)).toFixed(8)} ETH
                         </span>
                       </div>
@@ -133,23 +150,23 @@ export default function OrderHistory({
                 )}
 
                 {/* On-chain Details & Actions */}
-                <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                  <div className="space-y-1 text-slate-500">
+                <div className="pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1 text-[#80869a]">
                     <div>
                       <span>Ngày tạo: </span>
-                      <span className="font-medium text-slate-700">
+                      <span className="font-medium text-gray-300">
                         {new Date(order.created_at).toLocaleString("vi-VN")}
                       </span>
                     </div>
 
                     {order.tx_hash && (
-                      <div className="flex items-center gap-1 font-mono text-[11px] text-indigo-600">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px] text-[#e2f500]">
                         <span>TxHash: {order.tx_hash.substring(0, 16)}...</span>
                         <a
                           href={`https://sepolia.etherscan.io/tx/${order.tx_hash}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="hover:underline flex items-center gap-0.5"
+                          className="hover:underline flex items-center gap-0.5 text-white"
                           title="Xem trên Sepolia Etherscan"
                         >
                           <ExternalLink className="w-3 h-3" />
@@ -158,7 +175,7 @@ export default function OrderHistory({
                     )}
 
                     {order.buyer_wallet && (
-                      <div className="text-[11px] font-mono text-slate-400">
+                      <div className="text-[11px] font-mono text-[#6c7285]">
                         Ví người mua: {order.buyer_wallet}
                       </div>
                     )}
@@ -170,7 +187,7 @@ export default function OrderHistory({
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => onCancelOrder && onCancelOrder(order)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 text-xs font-semibold shadow-sm transition-all active:scale-95"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold transition-all active:scale-95 cursor-pointer"
                           title="Hủy đơn hàng này (xóa mềm)"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -178,7 +195,7 @@ export default function OrderHistory({
                         </button>
                         <button
                           onClick={() => onPayOrder(order)}
-                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95"
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#e2f500] hover:bg-[#ecff1a] text-black text-xs font-black shadow-md shadow-[#e2f500]/10 transition-all active:scale-95 cursor-pointer"
                         >
                           <Wallet className="w-3.5 h-3.5" />
                           <span>Thanh toán MetaMask</span>
@@ -187,15 +204,15 @@ export default function OrderHistory({
                     )}
 
                     {isPaid && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#10c273]/10 border border-[#10c273]/25 text-[#10c273] text-xs font-bold">
+                        <ShieldCheck className="w-4 h-4 text-[#10c273]" />
                         <span>Đã xác thực On-chain (Bất biến)</span>
                       </div>
                     )}
 
                     {isCancelled && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium">
-                        <Ban className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-medium">
+                        <Ban className="w-3.5 h-3.5 text-gray-500" />
                         <span>Đơn hàng đã hủy</span>
                       </div>
                     )}
@@ -206,22 +223,22 @@ export default function OrderHistory({
             );
           })}
 
-          {/* Pagination Controls (10 orders per page) */}
+          {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm text-xs mt-6">
-              <div className="text-slate-500 font-medium">
-                Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{" "}
-                <span className="font-bold text-slate-800">
+            <div className="bg-[#0d0e14] rounded-2xl border border-[#232736] p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs mt-6">
+              <div className="text-[#80869a]">
+                Hiển thị <span className="font-bold text-white">{startIndex + 1}</span> -{" "}
+                <span className="font-bold text-white">
                   {Math.min(startIndex + ordersPerPage, orders.length)}
                 </span>{" "}
-                trên tổng số <span className="font-bold text-indigo-600">{orders.length}</span> đơn hàng
+                trên tổng số <span className="font-bold text-[#e2f500]">{orders.length}</span> đơn hàng
               </div>
 
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                   disabled={validPage === 1}
-                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 disabled:hover:bg-white font-medium transition-colors flex items-center gap-1 shadow-sm"
+                  className="px-3 py-1.5 rounded-xl border border-[#232736] bg-[#141620] hover:bg-[#1d202d] text-gray-300 disabled:opacity-40 disabled:hover:bg-[#141620] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   title="Trang trước"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
@@ -233,10 +250,10 @@ export default function OrderHistory({
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-8 h-8 rounded-xl font-bold text-xs transition-all ${
+                      className={`w-8 h-8 rounded-xl font-bold text-xs transition-all cursor-pointer ${
                         validPage === pageNum
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                          : "border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+                          ? "bg-[#e2f500] text-black shadow-md shadow-[#e2f500]/20"
+                          : "border border-[#232736] bg-[#141620] hover:bg-[#1d202d] text-gray-300"
                       }`}
                     >
                       {pageNum}
@@ -247,7 +264,7 @@ export default function OrderHistory({
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                   disabled={validPage === totalPages}
-                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 disabled:opacity-40 disabled:hover:bg-white font-medium transition-colors flex items-center gap-1 shadow-sm"
+                  className="px-3 py-1.5 rounded-xl border border-[#232736] bg-[#141620] hover:bg-[#1d202d] text-gray-300 disabled:opacity-40 disabled:hover:bg-[#141620] font-semibold transition-colors flex items-center gap-1 cursor-pointer"
                   title="Trang sau"
                 >
                   <span>Sau</span>

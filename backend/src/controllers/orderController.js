@@ -1,4 +1,19 @@
+/**
+ * ==============================================================================
+ * MODULE: ORDER CONTROLLER (QUẢN LÝ ĐƠN HÀNG & TỒN KHO)
+ * ==============================================================================
+ * Kỹ sư phụ trách: Khang (Member 2 - Backend Developer)
+ * Chức năng:
+ *   1. Tạo đơn hàng (Chống Race Condition tồn kho bằng Database Transaction và FOR UPDATE).
+ *   2. Tính toán giá trị đơn hàng bằng BigInt Wei (ethers.js) chống sai số IEEE 754.
+ *   3. Kiểm soát phân quyền & chống lỗ hổng IDOR (Insecure Direct Object Reference).
+ *   4. Hủy đơn hàng an toàn (Tự động hoàn trả tồn kho, chặn hủy đơn đã thanh toán On-chain).
+ *   5. Khôi phục đơn hàng xóa mềm cho Quản trị viên (Kiểm tra và trừ lại tồn kho).
+ * ==============================================================================
+ */
+
 const { pool } = require("../config/db");
+const { ethers } = require("ethers");
 
 // Lấy danh sách đơn hàng (hỗ trợ lọc theo userId, hoặc lấy toàn bộ cho Admin)
 async function getAllOrders(req, res) {
@@ -13,10 +28,15 @@ async function getAllOrders(req, res) {
     const params = [];
     const whereClauses = [];
 
-    if (userId) {
+    // Bảo mật: Nếu người dùng thông thường đã đăng nhập, chỉ cho phép xem đơn hàng của chính mình
+    if (req.user && req.user.role !== "ADMIN") {
+      whereClauses.push("o.user_id = ?");
+      params.push(req.user.id);
+    } else if (userId) {
       whereClauses.push("o.user_id = ?");
       params.push(userId);
     }
+
     if (status) {
       whereClauses.push("o.status = ?");
       params.push(status);
@@ -59,6 +79,15 @@ async function getOrderById(req, res) {
     }
 
     const order = rows[0];
+
+    // Bảo mật phân quyền: Chỉ Admin hoặc chính chủ đơn hàng mới có quyền xem
+    if (req.user && req.user.role !== "ADMIN" && order.user_id !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền truy cập đơn hàng của người dùng khác!",
+      });
+    }
+
     const [items] = await pool.query(
       `SELECT oi.*, p.name AS product_name, p.image_url
        FROM order_items oi
@@ -81,9 +110,11 @@ async function createOrder(req, res) {
   try {
     await connection.beginTransaction();
 
-    const { userId = 1, fromCart = true, items = [] } = req.body;
+    const { fromCart = true, items = [] } = req.body;
+    // Chống IDOR: Nếu có thông tin đăng nhập từ token thì dùng req.user.id
+    const effectiveUserId = req.user && req.user.id ? req.user.id : req.body.userId || 1;
+
     let orderItemsToInsert = [];
-    let totalAmountEth = 0;
 
     if (fromCart) {
       // Lấy từ cart_items trong CSDL (khóa dòng sản phẩm để đảm bảo tính nhất quán tồn kho)
@@ -93,7 +124,7 @@ async function createOrder(req, res) {
          JOIN products p ON c.product_id = p.id
          WHERE c.user_id = ?
          FOR UPDATE`,
-        [userId]
+        [effectiveUserId]
       );
 
       if (cartRows.length === 0) {
@@ -129,7 +160,8 @@ async function createOrder(req, res) {
       }
     }
 
-    // 1. Kiểm tra trạng thái kinh doanh & tồn kho cho toàn bộ sản phẩm
+    // 1. Kiểm tra trạng thái kinh doanh & tồn kho + Tính tổng tiền bằng BigInt Wei (chống sai số IEEE 754)
+    let totalWei = 0n;
     for (const item of orderItemsToInsert) {
       if (item.is_active === 0) {
         await connection.rollback();
@@ -145,14 +177,20 @@ async function createOrder(req, res) {
           message: `Sản phẩm "${item.product_name}" không đủ số lượng tồn kho (Hiện có: ${item.stock}, Đặt mua: ${item.quantity})!`,
         });
       }
-      totalAmountEth += parseFloat(item.price_eth) * item.quantity;
+
+      // Tính tổng ETH chính xác tuyệt đối qua ethers.js BigInt Wei
+      const formattedPrice = parseFloat(item.price_eth).toFixed(8);
+      const itemPriceWei = ethers.parseEther(formattedPrice);
+      totalWei += itemPriceWei * BigInt(item.quantity);
     }
+
+    const totalAmountEthStr = ethers.formatEther(totalWei);
 
     // 2. Tạo bản ghi đơn hàng với trạng thái PENDING và is_deleted = 0
     const [orderResult] = await connection.query(
       `INSERT INTO orders (user_id, total_amount_eth, status, is_deleted)
        VALUES (?, ?, 'PENDING', 0)`,
-      [userId, totalAmountEth.toFixed(8)]
+      [effectiveUserId, totalAmountEthStr]
     );
 
     const orderId = orderResult.insertId;
@@ -174,19 +212,19 @@ async function createOrder(req, res) {
 
     // 4. Nếu tạo từ giỏ hàng thì xóa sạch giỏ hàng của user
     if (fromCart) {
-      await connection.query("DELETE FROM cart_items WHERE user_id = ?", [userId]);
+      await connection.query("DELETE FROM cart_items WHERE user_id = ?", [effectiveUserId]);
     }
 
     await connection.commit();
 
-    console.log(`📦 [Order Created & Stock Deducted] Đơn hàng #${orderId} | Tổng: ${totalAmountEth.toFixed(8)} ETH | Tồn kho đã tự động trừ.`);
+    console.log(`📦 [Order Created & Stock Deducted] Đơn hàng #${orderId} | Tổng: ${totalAmountEthStr} ETH | Tồn kho đã tự động trừ.`);
 
     res.status(201).json({
       success: true,
       message: "Order created successfully (Pending Payment)",
       data: {
         orderId,
-        totalAmountEth: totalAmountEth.toFixed(8),
+        totalAmountEth: totalAmountEthStr,
         status: "PENDING",
       },
     });
@@ -219,6 +257,15 @@ async function cancelOrSoftDeleteOrder(req, res) {
     }
 
     const order = rows[0];
+
+    // Bảo mật: Kiểm tra quyền hủy (Chỉ Admin hoặc chính chủ đơn hàng)
+    if (req.user && req.user.role !== "ADMIN" && order.user_id !== req.user.id) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền hủy đơn hàng của người dùng khác!",
+      });
+    }
 
     // Không cho phép hủy đơn hàng đã thanh toán PAID on-chain
     if (order.status === "PAID") {

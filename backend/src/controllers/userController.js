@@ -5,7 +5,7 @@ async function getAllUsers(req, res) {
   try {
     const [rows] = await pool.query(`
       SELECT 
-        u.*, 
+        u.id, u.full_name, u.email, u.role, u.wallet_address, u.is_active, u.created_at, u.updated_at, 
         COUNT(o.id) AS total_orders,
         COALESCE(SUM(CASE WHEN o.status = 'PAID' THEN o.total_amount_eth ELSE 0 END), 0) AS total_eth_spent
       FROM users u
@@ -26,7 +26,7 @@ async function getUserById(req, res) {
     const { id } = req.params;
     const [rows] = await pool.query(
       `SELECT 
-        u.*, 
+        u.id, u.full_name, u.email, u.role, u.wallet_address, u.is_active, u.created_at, u.updated_at, 
         COUNT(o.id) AS total_orders,
         COALESCE(SUM(CASE WHEN o.status = 'PAID' THEN o.total_amount_eth ELSE 0 END), 0) AS total_eth_spent
        FROM users u

@@ -16,7 +16,7 @@
     "hybrid-dapp",
     "blockchain-listener"
   ],
-  "author": "Member 2 - Backend Developer",
+  "author": "Khang (Backend Developer) <ntakhanghttt2311013@student.ctuet.edu.vn>",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^3.0.3",

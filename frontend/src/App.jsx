@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Navbar from "./components/Navbar";
 import ProductCard from "./components/ProductCard";
 import ProductModal from "./components/ProductModal";
+import ProductMotionShowcase from "./components/ProductMotionShowcase";
 import CartDrawer from "./components/CartDrawer";
 import OrderHistory from "./components/OrderHistory";
 import TransactionModal from "./components/TransactionModal";
@@ -9,7 +10,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import AuthModal from "./components/AuthModal";
 import { apiService } from "./services/apiService";
 import { web3Service } from "./services/web3Service";
-import { Sparkles, Shield, Cpu, Database, CheckCircle2, ShoppingBag, ShieldCheck } from "lucide-react";
+import { Sparkles, Shield, Cpu, Database, CheckCircle2, ShoppingBag, ShieldCheck, ArrowRight, Layers, Lock } from "lucide-react";
 
 export default function App() {
   const [walletInfo, setWalletInfo] = useState(null);
@@ -17,6 +18,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const [products, setProducts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState({ items: [], totalItems: 0, totalAmountEth: "0.00000000" });
   const [orders, setOrders] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -377,10 +379,20 @@ export default function App() {
     }
   };
 
+  // Lọc sản phẩm theo từ khóa tìm kiếm
+  const filteredProducts = products.filter((p) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      p.name?.toLowerCase().includes(q) ||
+      p.description?.toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div className={`min-h-screen ${activeTab === "admin" ? "bg-slate-900" : "bg-slate-50 flex flex-col justify-between"}`}>
+    <div className={`min-h-screen ${activeTab === "admin" ? "bg-slate-900" : "bg-[#050608] text-white flex flex-col justify-between"}`}>
       {activeTab === "admin" ? (
-        /* GIAO DIỆN DÀNH RIÊNG CHO QUẢN TRỊ VIÊN (ADMIN DASHBOARD) */
+        /* GIAO DIỆN DÀNH RIÊNG CHO QUẢN TRỊ VIÊN (ADMIN DASHBOARD GIỮ NGUYÊN) */
         <AdminDashboard
           currentUser={currentUser}
           onLogout={handleLogout}
@@ -393,7 +405,7 @@ export default function App() {
         />
       ) : (
         <div>
-          {/* Navigation Bar Dành Riêng Cho Khách Hàng */}
+          {/* Navigation Bar Khách Hàng (Rarible Style) */}
           <Navbar
             walletInfo={walletInfo}
             onConnectWallet={handleConnectWallet}
@@ -404,64 +416,57 @@ export default function App() {
             currentUser={currentUser}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
             onLogout={handleLogout}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
 
-          {/* GIAO DIỆN DÀNH RIÊNG CHO KHÁCH HÀNG (CUSTOMER STOREFRONT) */}
-          {/* Hero / Architecture Banner */}
-          <div className="bg-gradient-to-b from-indigo-900 via-slate-900 to-slate-900 text-white py-12 px-4 sm:px-6 lg:px-8 border-b border-indigo-950">
-              <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                  <div className="max-w-2xl">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-400/20 text-indigo-300 text-xs font-semibold mb-3">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Mô hình Hybrid DApp (Kết hợp Off-chain & On-chain)</span>
-                    </div>
-                    <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                      Cửa Hàng Thương Mại Điện Tử Web3
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-300 leading-relaxed">
-                      Trải nghiệm thanh toán trực tiếp qua <strong className="text-indigo-300">Ethereum Smart Contract</strong> kết hợp hệ cơ sở dữ liệu <strong className="text-indigo-300">MySQL</strong> tốc độ cao với cơ chế <strong className="text-indigo-300">Sổ cái bất biến (Immutable Ledger)</strong> chống gian lận 100%.
+          {/* Thanh Trình Bày Chuyển Động Sản Phẩm (Rarible Product Motion Showcase) */}
+          {activeTab === "products" && (
+            <ProductMotionShowcase
+              products={products}
+              onSelectProduct={setSelectedProduct}
+              onAddToCart={handleAddToCart}
+            />
+          )}
+
+
+
+          {/* Main Content Area */}
+          <main className="max-w-[1520px] mx-auto px-4 md:px-6 py-8">
+            {activeTab === "products" ? (
+              <div>
+                {/* Products Section Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      Danh sách Sản phẩm Nổi bật
+                    </h2>
+                    <p className="text-xs text-[#80869a] mt-0.5">
+                      Đơn giá niêm yết bằng đồng ETH (Sepolia / Localhost)
                     </p>
                   </div>
-
-                  {/* Thông tin đăng nhập nhanh nếu khách chưa đăng nhập */}
-                  {!currentUser && (
-                    <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 max-w-sm flex-shrink-0 text-xs">
-                      <div className="flex items-center gap-2 font-bold text-white mb-2">
-                        <ShoppingBag className="w-4 h-4 text-cyan-400" />
-                        <span>Đăng nhập để đặt hàng & lưu đơn</span>
-                      </div>
-                      <p className="text-slate-400 mb-3">
-                        Hệ thống đã tách riêng giao diện Khách hàng và Admin. Đăng nhập để xem lịch sử mua sắm cá nhân.
-                      </p>
-                      <button
-                        onClick={() => setIsAuthModalOpen(true)}
-                        className="w-full py-2 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md transition-all text-center block"
-                      >
-                        Đăng Nhập / Đăng Ký Tài Khoản
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Main Content Area */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              {activeTab === "products" ? (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Danh sách Sản phẩm Nổi bật</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">Đơn giá niêm yết bằng đồng ETH (Sepolia / Localhost)</p>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-                      {products.length} sản phẩm sẵn có
+                  
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-gray-300 bg-[#12141c] border border-[#202432] px-3.5 py-1.5 rounded-full">
+                      {filteredProducts.length} sản phẩm sẵn có
                     </span>
                   </div>
+                </div>
 
+                {/* Products Grid */}
+                {filteredProducts.length === 0 ? (
+                  <div className="bg-[#0d0e14] border border-[#232736] rounded-2xl p-12 text-center text-[#80869a]">
+                    <p className="text-sm">Không tìm thấy sản phẩm nào phù hợp với từ khóa "{searchQuery}"</p>
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="mt-3 px-4 py-1.5 bg-[#181a24] hover:bg-[#202432] text-xs font-semibold text-white rounded-xl border border-[#292d3b] transition-colors"
+                    >
+                      Xóa bộ lọc tìm kiếm
+                    </button>
+                  </div>
+                ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {products.map((product) => (
+                    {filteredProducts.map((product) => (
                       <ProductCard
                         key={product.id}
                         product={product}
@@ -470,48 +475,49 @@ export default function App() {
                       />
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div>
-                  {!currentUser ? (
-                    <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center max-w-md mx-auto shadow-sm">
-                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center mb-4">
-                        <ShoppingBag className="w-8 h-8" />
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-1">Yêu Cầu Đăng Nhập</h3>
-                      <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-                        Vui lòng đăng nhập tài khoản Khách hàng để theo dõi lịch sử đơn hàng và trạng thái thanh toán Smart Contract của riêng bạn.
-                      </p>
-                      <button
-                        onClick={() => setIsAuthModalOpen(true)}
-                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all"
-                      >
-                        Đăng Nhập Ngay
-                      </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                {!currentUser ? (
+                  <div className="bg-[#0d0e14] border border-[#232736] rounded-2xl p-12 text-center max-w-md mx-auto shadow-2xl">
+                    <div className="w-16 h-16 rounded-2xl bg-[#141620] border border-[#222634] text-[#e2f500] mx-auto flex items-center justify-center mb-4">
+                      <ShoppingBag className="w-8 h-8" />
                     </div>
-                  ) : (
-                    <OrderHistory
-                      orders={orders}
-                      onRefresh={() => loadOrders(currentUser.id)}
-                      onPayOrder={handlePayPendingOrder}
-                      onCancelOrder={handleCancelPendingOrder}
-                      isLoading={isLoadingOrders}
-                    />
-                  )}
-                </div>
-              )}
-            </main>
-          </div>
-        )}
+                    <h3 className="text-lg font-black text-white mb-1">Yêu Cầu Đăng Nhập</h3>
+                    <p className="text-xs text-[#80869a] mb-6 leading-relaxed">
+                      Vui lòng đăng nhập tài khoản Khách hàng để theo dõi lịch sử đơn hàng và trạng thái thanh toán Smart Contract của riêng bạn.
+                    </p>
+                    <button
+                      onClick={() => setIsAuthModalOpen(true)}
+                      className="px-6 py-2.5 bg-[#e2f500] hover:bg-[#ecff1a] text-black font-extrabold text-xs rounded-full shadow-[0_0_20px_rgba(226,245,0,0.2)] transition-all cursor-pointer"
+                    >
+                      Đăng Nhập Ngay
+                    </button>
+                  </div>
+                ) : (
+                  <OrderHistory
+                    orders={orders}
+                    onRefresh={() => loadOrders(currentUser.id)}
+                    onPayOrder={handlePayPendingOrder}
+                    onCancelOrder={handleCancelPendingOrder}
+                    isLoading={isLoadingOrders}
+                  />
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+      )}
 
-      {/* Footer (Chỉ hiển thị cho Cửa hàng khách hàng) */}
+      {/* Footer (Rarible Style - Chỉ hiển thị cho Storefront) */}
       {activeTab !== "admin" && (
-        <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p>© 2026 Mini E-Commerce Hybrid DApp.</p>
+        <footer className="w-full bg-[#050608] border-t border-[#171922] py-8 text-xs text-[#8e92a4]">
+          <div className="max-w-[1520px] mx-auto px-4 md:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="font-medium text-gray-400">© 2026 Mini E-Commerce Hybrid DApp.</p>
             <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1 text-slate-600 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="flex items-center gap-1.5 font-mono text-[11px] text-gray-300">
+                <span className="w-2 h-2 rounded-full bg-[#10c273] animate-pulse" />
                 Node.js v24 • Hardhat • ethers.js v6 • MySQL • JWT RBAC
               </span>
             </div>
