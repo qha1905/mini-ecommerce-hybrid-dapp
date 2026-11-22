@@ -32,9 +32,10 @@ import {
   Upload,
   Loader2,
   Image as ImageIcon,
+  Wallet,
 } from "lucide-react";
 import { apiService } from "../services/apiService";
-import { CONTRACT_ADDRESS, CONTRACT_CHAIN_ID } from "../services/web3Service";
+import { CONTRACT_ADDRESS, CONTRACT_CHAIN_ID, web3Service } from "../services/web3Service";
 
 export default function AdminDashboard({
   onBackToStore,
@@ -49,6 +50,13 @@ export default function AdminDashboard({
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
+
+  // On-chain Smart Contract state (Số dư & Rút tiền Owner)
+  const [contractBalance, setContractBalance] = useState(null);
+  const [contractOwner, setContractOwner] = useState("");
+  const [isLoadingContract, setIsLoadingContract] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [lastWithdrawTx, setLastWithdrawTx] = useState(null);
 
   // Toast notification
   const [toast, setToast] = useState(null);
@@ -147,8 +155,43 @@ export default function AdminDashboard({
     }
   };
 
+  const loadContractInfo = async () => {
+    setIsLoadingContract(true);
+    try {
+      const info = await web3Service.getContractInfo();
+      setContractBalance(info.balanceEth);
+      setContractOwner(info.ownerAddress);
+    } catch (err) {
+      console.warn("Could not fetch on-chain contract info:", err.message);
+    } finally {
+      setIsLoadingContract(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    setIsWithdrawing(true);
+    try {
+      const result = await web3Service.withdrawFunds();
+      setLastWithdrawTx(result.txHash);
+      showToast(
+        `Rút thành công ${result.withdrawnEth} ETH từ Smart Contract về ví Owner!`
+      );
+      await loadContractInfo();
+    } catch (err) {
+      console.error("Withdraw error:", err);
+      const msg =
+        err.code === "ACTION_REJECTED" || err.code === 4001
+          ? "Bạn đã hủy giao dịch rút tiền trên MetaMask."
+          : err.reason || err.shortMessage || err.message || "Rút tiền thất bại";
+      showToast(msg, "error");
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
   useEffect(() => {
     loadAllData();
+    loadContractInfo();
   }, []);
 
   // ===================== PRODUCT CRUD =====================
@@ -743,30 +786,89 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Smart Contract Notice Card */}
+              {/* Smart Contract Notice Card & Withdraw Control */}
               <div className="bg-slate-800/50 border border-slate-700/80 rounded-2xl p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+                  <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                       <h3 className="text-base font-bold text-white">Smart Contract: EcommercePayment.sol (Sepolia Testnet)</h3>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1 font-mono">
+                    <p className="text-xs text-slate-400 font-mono break-all">
                       Hợp đồng: {CONTRACT_ADDRESS} (Chain ID: {CONTRACT_CHAIN_ID || "11155111"})
                     </p>
-                    <p className="text-xs text-slate-300 mt-1">
-                      ✓ Bộ lắng nghe sự kiện (Event Listener) hoạt động 24/7 để đối soát trạng thái đơn hàng ngay khi người mua kích hoạt thanh toán.
-                    </p>
+                    {contractOwner && (
+                      <p className="text-xs text-slate-400 font-mono break-all">
+                        Ví Owner (Quyền rút tiền): <span className="text-amber-300">{contractOwner}</span>
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                        <Wallet className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs text-slate-300">Số dư On-chain khả dụng:</span>
+                        <span className="text-sm font-bold text-emerald-400 font-mono">
+                          {isLoadingContract
+                            ? "Đang tải..."
+                            : contractBalance !== null
+                            ? `${Number(contractBalance).toFixed(6)} ETH`
+                            : "—"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={loadContractInfo}
+                        disabled={isLoadingContract}
+                        title="Cập nhật số dư On-chain"
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingContract ? "animate-spin" : ""}`} />
+                      </button>
+                    </div>
+                    {lastWithdrawTx && (
+                      <p className="text-xs text-emerald-300 pt-1">
+                        ✓ Giao dịch rút tiền gần nhất:{" "}
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${lastWithdrawTx}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline font-mono hover:text-emerald-200"
+                        >
+                          {lastWithdrawTx.slice(0, 14)}...{lastWithdrawTx.slice(-8)}
+                        </a>
+                      </p>
+                    )}
                   </div>
-                  <a
-                    href={`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all hover:scale-105"
-                  >
-                    <span>Xem trên Sepolia Etherscan</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleWithdraw}
+                      disabled={isWithdrawing || isLoadingContract}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 cursor-pointer"
+                    >
+                      {isWithdrawing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Đang rút tiền...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Wallet className="w-4 h-4" />
+                          <span>Rút tiền (Withdraw)</span>
+                        </>
+                      )}
+                    </button>
+
+                    <a
+                      href={`https://sepolia.etherscan.io/address/${CONTRACT_ADDRESS}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all hover:scale-105"
+                    >
+                      <span>Xem trên Sepolia Etherscan</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
                 </div>
               </div>
 

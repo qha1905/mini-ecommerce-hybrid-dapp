@@ -211,6 +211,88 @@ class Web3Service {
       blockNumber: receipt.blockNumber,
     };
   }
+
+  // Đọc số dư hiện tại và địa chỉ Owner trực tiếp từ Smart Contract
+  async getContractInfo() {
+    if (!this.contractAddress || !this.contractAbi) {
+      throw new Error("Thông tin CONTRACT_ADDRESS hoặc ABI chưa được cấu hình.");
+    }
+
+    const provider = this.isInstalled()
+      ? this.getProvider()
+      : new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+
+    const contract = new ethers.Contract(this.contractAddress, this.contractAbi, provider);
+    const [balanceWei, ownerAddress] = await Promise.all([
+      contract.getBalance(),
+      contract.owner(),
+    ]);
+
+    return {
+      balanceEth: ethers.formatEther(balanceWei),
+      balanceWei: balanceWei.toString(),
+      ownerAddress,
+    };
+  }
+
+  // Rút toàn bộ số dư ETH trong Smart Contract về ví chủ shop (chỉ Owner mới gọi được)
+  async withdrawFunds() {
+    if (!this.isInstalled()) {
+      throw new Error("MetaMask chưa được cài đặt. Vui lòng cài MetaMask để rút tiền.");
+    }
+
+    const provider = this.getProvider();
+    this.signer = await provider.getSigner();
+    const signerAddress = await this.signer.getAddress();
+
+    // Kiểm tra đúng mạng Blockchain yêu cầu
+    let currentChainId = await this.getCurrentChainId();
+    const expectedChainId = this.contractChainId || "11155111";
+
+    if (currentChainId !== expectedChainId) {
+      if (expectedChainId === "31337") {
+        await this.switchToHardhatLocalhost();
+      } else if (expectedChainId === "11155111") {
+        await this.switchToSepolia();
+      }
+      currentChainId = await this.getCurrentChainId();
+    }
+
+    if (currentChainId !== expectedChainId) {
+      throw new Error(
+        `Sai mạng Blockchain! Vui lòng chuyển MetaMask sang ${this.getNetworkName(expectedChainId)}.`
+      );
+    }
+
+    if (!this.contractAddress || !this.contractAbi) {
+      throw new Error("Thông tin CONTRACT_ADDRESS hoặc ABI chưa được cấu hình.");
+    }
+
+    const contract = new ethers.Contract(this.contractAddress, this.contractAbi, this.signer);
+    const [balanceWei, ownerAddress] = await Promise.all([
+      contract.getBalance(),
+      contract.owner(),
+    ]);
+
+    if (signerAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+      throw new Error(
+        `Ví đang kết nối (${signerAddress.slice(0, 6)}...${signerAddress.slice(-4)}) không phải ví Owner (${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)})!`
+      );
+    }
+
+    if (balanceWei === 0n) {
+      throw new Error("Smart Contract hiện không có số dư ETH nào để rút.");
+    }
+
+    const tx = await contract.withdraw();
+    const receipt = await tx.wait(1);
+
+    return {
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      withdrawnEth: ethers.formatEther(balanceWei),
+    };
+  }
 }
 
 export const web3Service = new Web3Service();
