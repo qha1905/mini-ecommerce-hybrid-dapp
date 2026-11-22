@@ -390,4 +390,10 @@ export const apiService = {
       return { success: false, error: e.message };
     }
   },
+
+  async verifyOrderIntegrity(orderId) {
+    const res = await fetch(`${API_BASE_URL}/blockchain/verify-integrity/${orderId}`);
+    if (!res.ok) throw new Error("Không thể kiểm tra toàn vẹn đơn hàng");
+    return await res.json();
+  },
 };

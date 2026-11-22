@@ -23,7 +23,11 @@ dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const { testConnection } = require("./config/db");
-const { startBlockchainListener, verifyAndSyncPayment } = require("./services/blockchainListener");
+const {
+  startBlockchainListener,
+  verifyAndSyncPayment,
+  verifyOrderIntegrity,
+} = require("./services/blockchainListener");
 const { extractUser } = require("./middleware/authMiddleware");
 
 const productRoutes = require("./routes/productRoutes");
@@ -78,6 +82,16 @@ app.post("/api/blockchain/verify-payment", async (req, res, next) => {
     } else {
       return res.status(400).json(result);
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Endpoint kiểm toán toàn vẹn: đối chiếu dữ liệu MySQL với Blockchain để phát hiện chỉnh sửa DB
+app.get("/api/blockchain/verify-integrity/:orderId", async (req, res, next) => {
+  try {
+    const result = await verifyOrderIntegrity(req.params.orderId);
+    res.json(result);
   } catch (err) {
     next(err);
   }

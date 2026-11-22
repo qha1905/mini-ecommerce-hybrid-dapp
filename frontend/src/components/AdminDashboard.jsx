@@ -58,6 +58,10 @@ export default function AdminDashboard({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [lastWithdrawTx, setLastWithdrawTx] = useState(null);
 
+  // State kiểm toán toàn vẹn On-chain vs Database
+  const [auditResults, setAuditResults] = useState({});
+  const [auditingOrderId, setAuditingOrderId] = useState(null);
+
   // Toast notification
   const [toast, setToast] = useState(null);
   const showToast = (message, type = "success") => {
@@ -186,6 +190,23 @@ export default function AdminDashboard({
       showToast(msg, "error");
     } finally {
       setIsWithdrawing(false);
+    }
+  };
+
+  const handleVerifyIntegrity = async (orderId) => {
+    setAuditingOrderId(orderId);
+    try {
+      const res = await apiService.verifyOrderIntegrity(orderId);
+      setAuditResults((prev) => ({ ...prev, [orderId]: res }));
+      if (res.verified) {
+        showToast(res.message, "success");
+      } else {
+        showToast(res.message, "error");
+      }
+    } catch (err) {
+      showToast("Lỗi khi kiểm tra toàn vẹn: " + err.message, "error");
+    } finally {
+      setAuditingOrderId(null);
     }
   };
 
@@ -1536,16 +1557,49 @@ export default function AdminDashboard({
                               ) : (
                                 <span className="text-xs text-slate-500 italic">Chưa giao dịch</span>
                               )}
+                              {auditResults[o.id] && (
+                                <div className="mt-1">
+                                  {auditResults[o.id].verified ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                                      <ShieldCheck className="w-3.5 h-3.5" />
+                                      Khớp On-chain (Toàn vẹn)
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400"
+                                      title={auditResults[o.id].message}
+                                    >
+                                      <AlertTriangle className="w-3.5 h-3.5" />
+                                      Bị thay đổi dữ liệu DB!
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                              <button
-                                onClick={() => setSelectedOrderDetails(o)}
-                                className="px-3 py-1.5 bg-slate-700/60 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
-                                title="Xem chi tiết đơn hàng"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Xem</span>
-                              </button>
+                              <div className="inline-flex items-center gap-2">
+                                <button
+                                  onClick={() => handleVerifyIntegrity(o.id)}
+                                  disabled={auditingOrderId === o.id}
+                                  className="px-2.5 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                                  title="Đối soát kiểm tra tx_hash và số tiền với Blockchain"
+                                >
+                                  {auditingOrderId === o.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>Kiểm tra</span>
+                                </button>
+                                <button
+                                  onClick={() => setSelectedOrderDetails(o)}
+                                  className="px-3 py-1.5 bg-slate-700/60 hover:bg-slate-600 text-slate-200 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5"
+                                  title="Xem chi tiết đơn hàng"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Xem</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -2421,6 +2475,44 @@ export default function AdminDashboard({
                     </div>
                   </div>
                 )}
+
+                {/* Kiểm toán toàn vẹn On-chain */}
+                <div className="pt-3 border-t border-slate-700/60 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-400 font-semibold">Đối soát toàn vẹn với Blockchain:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyIntegrity(selectedOrderDetails.id)}
+                      disabled={auditingOrderId === selectedOrderDetails.id}
+                      className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      {auditingOrderId === selectedOrderDetails.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Đang đối soát...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Kiểm tra toàn vẹn On-chain</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {auditResults[selectedOrderDetails.id] && (
+                    <div
+                      className={`p-3 rounded-lg border text-xs leading-relaxed ${
+                        auditResults[selectedOrderDetails.id].verified
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                          : "bg-rose-500/15 border-rose-500/40 text-rose-300 font-semibold"
+                      }`}
+                    >
+                      {auditResults[selectedOrderDetails.id].verified ? "✅ " : "🚨 "}
+                      {auditResults[selectedOrderDetails.id].message}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Items List */}

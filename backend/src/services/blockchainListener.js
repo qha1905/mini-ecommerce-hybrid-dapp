@@ -314,8 +314,165 @@ async function verifyAndSyncPayment(txHash, fallbackOrderId) {
   }
 }
 
+/**
+ * Kiểm toán toàn vẹn dữ liệu On-chain vs Off-chain (MySQL)
+ * Phát hiện trường hợp kẻ gian sửa trực tiếp tx_hash, status, buyer_wallet hoặc total_amount_eth trong Database
+ */
+async function verifyOrderIntegrity(orderId) {
+  const numericId = Number(orderId);
+  if (!numericId || numericId <= 0) {
+    return { success: false, verified: false, status: "INVALID", message: "Mã đơn hàng không hợp lệ." };
+  }
+
+  const [orders] = await pool.query("SELECT * FROM orders WHERE id = ?", [numericId]);
+  if (orders.length === 0) {
+    return { success: false, verified: false, status: "NOT_FOUND", message: `Không tìm thấy đơn hàng #${numericId} trong MySQL.` };
+  }
+
+  const order = orders[0];
+  const { contractAddress, contractAbi } = getContractMetadata();
+  const rpcUrl = process.env.BLOCKCHAIN_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+  if (!providerInstance) {
+    providerInstance = new ethers.JsonRpcProvider(rpcUrl);
+  }
+
+  try {
+    const contract = contractAddress && contractAbi
+      ? new ethers.Contract(contractAddress, contractAbi, providerInstance)
+      : null;
+
+    // Trường hợp 1: Đơn trong DB chưa phải PAID -> kiểm tra trên chuỗi xem có ai sửa ngược trạng thái trong DB không
+    if (order.status !== "PAID") {
+      if (contract) {
+        const isPaidOnChain = await contract.isOrderPaid(numericId);
+        if (isPaidOnChain) {
+          return {
+            success: true,
+            verified: false,
+            status: "TAMPERED",
+            message: `Phát hiện bất thường: Đơn #${numericId} đã thanh toán trên Smart Contract nhưng trạng thái trong CSDL bị sửa thành '${order.status}'!`,
+          };
+        }
+      }
+      return {
+        success: true,
+        verified: true,
+        status: "UNPAID",
+        message: `Đơn hàng #${numericId} (${order.status}) chưa thanh toán — khớp với trạng thái trên Blockchain.`,
+      };
+    }
+
+    // Trường hợp 2: Đơn trong DB đang là PAID -> kiểm chứng tx_hash và event trên chuỗi
+    if (!order.tx_hash || !/^0x([A-Fa-f0-9]{64})$/.test(order.tx_hash.trim())) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện sửa đổi CSDL: Đơn #${numericId} có trạng thái PAID nhưng mã băm tx_hash bị thiếu hoặc sai định dạng!`,
+      };
+    }
+
+    const receipt = await providerInstance.getTransactionReceipt(order.tx_hash.trim());
+    if (!receipt || receipt.status !== 1) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện giả mạo tx_hash: Mã băm ${order.tx_hash} trong CSDL không tồn tại hoặc giao dịch thất bại trên Blockchain Sepolia!`,
+      };
+    }
+
+    if (contractAddress && receipt.to && receipt.to.toLowerCase() !== contractAddress.toLowerCase()) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện tráo mã băm: Giao dịch trong CSDL được gửi tới địa chỉ ${receipt.to}, không phải Smart Contract của cửa hàng (${contractAddress})!`,
+      };
+    }
+
+    if (!contractAbi) {
+      return { success: false, verified: false, status: "ERROR", message: "Thiếu ABI trong contractData.json để giải mã sự kiện." };
+    }
+
+    const iface = new ethers.Interface(contractAbi);
+    let parsedEvent = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed && parsed.name === "PaymentCompleted") {
+          parsedEvent = parsed;
+          break;
+        }
+      } catch (e) {
+        // Bỏ qua log không thuộc contract
+      }
+    }
+
+    if (!parsedEvent) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện giả mạo: Giao dịch ${order.tx_hash} không chứa sự kiện PaymentCompleted của Smart Contract!`,
+      };
+    }
+
+    const onChainOrderId = Number(parsedEvent.args.orderId);
+    const onChainBuyer = parsedEvent.args.buyer.toLowerCase();
+    const onChainAmountEth = parseFloat(ethers.formatEther(parsedEvent.args.amount));
+    const dbAmountEth = parseFloat(order.total_amount_eth);
+    const dbBuyer = (order.buyer_wallet || "").toLowerCase();
+
+    if (onChainOrderId !== numericId) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện tráo mã băm giữa các đơn! tx_hash trong CSDL thuộc về đơn #${onChainOrderId}, không phải đơn #${numericId}!`,
+      };
+    }
+
+    if (dbBuyer !== onChainBuyer) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện sửa ví người mua trong CSDL! DB lưu (${order.buyer_wallet || "trống"}) ≠ Blockchain (${onChainBuyer}).`,
+      };
+    }
+
+    if (Math.abs(onChainAmountEth - dbAmountEth) > 0.0000001) {
+      return {
+        success: true,
+        verified: false,
+        status: "TAMPERED",
+        message: `Phát hiện sai lệch số tiền! CSDL ghi ${dbAmountEth} ETH ≠ Blockchain thực nhận ${onChainAmountEth} ETH.`,
+      };
+    }
+
+    return {
+      success: true,
+      verified: true,
+      status: "MATCHED",
+      message: `Toàn vẹn 100%: Mã băm tx_hash, ví người mua và số tiền (${onChainAmountEth} ETH) khớp hoàn toàn với Blockchain Sepolia!`,
+      onChainData: {
+        orderId: onChainOrderId,
+        buyer: onChainBuyer,
+        amountEth: ethers.formatEther(parsedEvent.args.amount),
+        blockNumber: receipt.blockNumber,
+        txHash: order.tx_hash,
+      },
+    };
+  } catch (error) {
+    console.error("Lỗi khi kiểm toán toàn vẹn đơn hàng:", error);
+    return { success: false, verified: false, status: "ERROR", message: "Lỗi kết nối RPC Blockchain: " + error.message };
+  }
+}
+
 module.exports = {
   startBlockchainListener,
   handlePaymentCompletedEvent,
   verifyAndSyncPayment,
+  verifyOrderIntegrity,
 };
